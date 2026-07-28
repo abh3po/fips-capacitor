@@ -1,0 +1,14 @@
+android {
+    buildTypes {
+        debug {
+            debuggable true
+        }
+    }
+}
+
+task copyDownloadableDepsToLibs(type: Copy) {
+    from configurations.implementation
+    into 'app/libs'
+}
+
+apply from: "../variables.gradle"

@@ -1,0 +1,25 @@
+{
+  "name": "fips-browser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FIPS mesh browser — browse .fips websites and test FIPS connectivity on Android",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@formstr/fips-capacitor-plugin": "workspace:*"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0"
+  }
+}

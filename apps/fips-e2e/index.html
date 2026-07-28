@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>FIPS E2E Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 20px; margin-bottom: 16px; color: #58a6ff; }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card h2 { font-size: 14px; color: #8b949e; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .row label { font-size: 13px; color: #8b949e; min-width: 80px; }
+    .row .value { font-size: 13px; font-family: monospace; word-break: break-all; }
+    button {
+      background: #238636;
+      color: #fff;
+      border: 1px solid #2ea043;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.danger { background: #da3633; border-color: #f85149; }
+    button.secondary { background: #21262d; border-color: #30363d; }
+    input, textarea {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      padding: 8px;
+      font-size: 13px;
+      font-family: monospace;
+      width: 100%;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    #log {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #161b22; }
+    .log-entry.in { color: #7ee787; }
+    .log-entry.out { color: #79c0ff; }
+    .log-entry.system { color: #8b949e; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.running { background: #238636; color: #fff; }
+    .badge.stopped { background: #30363d; color: #8b949e; }
+    .badge.starting { background: #9e6a03; color: #fff; }
+  </style>
+</head>
+<body>
+  <h1>FIPS E2E Test Harness</h1>
+
+  <div class="card">
+    <h2>Node Control</h2>
+    <div class="row">
+      <span id="state-badge" class="badge stopped">STOPPED</span>
+      <button id="btn-start" onclick="startNode()">Start Node</button>
+      <button id="btn-stop" class="danger" onclick="stopNode()" disabled>Stop</button>
+    </div>
+    <div class="row">
+      <label>Npub</label>
+      <span class="value" id="npub">—</span>
+    </div>
+    <div class="row">
+      <label>Address</label>
+      <span class="value" id="address">—</span>
+    </div>
+    <div class="row">
+      <label>Node Addr</label>
+      <span class="value" id="node-addr">—</span>
+    </div>
+    <div class="row">
+      <label>Peers</label>
+      <span class="value" id="peer-count">0</span>
+    </div>
+    <div class="row">
+      <label>Sessions</label>
+      <span class="value" id="session-count">0</span>
+    </div>
+    <div class="row">
+      <label>Uptime</label>
+      <span class="value" id="uptime">—</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Send Datagram</h2>
+    <div class="row">
+      <label>To Npub</label>
+      <input id="send-npub" placeholder="npub1..." />
+    </div>
+    <div class="row">
+      <label>Payload</label>
+      <textarea id="send-payload" placeholder="Enter text payload...">Hello from FIPS E2E test!</textarea>
+    </div>
+    <button id="btn-send" onclick="sendDatagram()">Send</button>
+  </div>
+
+  <div class="card">
+    <h2>Add Peer</h2>
+    <div class="row">
+      <label>Npub</label>
+      <input id="peer-npub" placeholder="npub1..." />
+    </div>
+    <div class="row">
+      <label>Address</label>
+      <input id="peer-addr" placeholder="host:port" />
+    </div>
+    <button id="btn-add-peer" class="secondary" onclick="addPeer()">Add Peer</button>
+  </div>
+
+  <div class="card">
+    <h2>Peers</h2>
+    <div id="peer-list" style="font-size: 12px; font-family: monospace;">No peers connected</div>
+    <button id="btn-refresh-peers" class="secondary" style="margin-top: 8px;" onclick="refreshPeers()">Refresh</button>
+  </div>
+
+  <div class="card">
+    <h2>Datagram Log</h2>
+    <div id="log"></div>
+    <button id="btn-clear-log" class="secondary" style="margin-top: 8px;" onclick="clearLog()">Clear</button>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

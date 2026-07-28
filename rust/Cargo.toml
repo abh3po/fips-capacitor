@@ -1,0 +1,22 @@
+[package]
+name = "fips-jni"
+version = "0.1.0"
+edition = "2024"
+description = "JNI bindings for the FIPS mesh networking protocol"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fips = { git = "https://github.com/jmcorgan/fips.git", branch = "main" }
+jni = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros"] }
+log = "0.4"
+android_logger = "0.14"
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,112 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 system-images;android-35;google_apis;x86_64 emulator"
+
+      - name: Build native libraries
+        working-directory: rust
+        run: |
+          cargo ndk -t x86_64 -o ../android/src/main/jniLibs build --release
+
+      - name: Build fips-e2e web assets
+        working-directory: apps/fips-e2e
+        run: |
+          npm install
+          npm run build
+
+      - name: Sync Capacitor Android
+        working-directory: apps/fips-e2e
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: apps/fips-e2e/android
+        run: ./gradlew assembleDebug
+
+      - name: Create AVDs
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "system-images;android-35;google_apis;x86_64"
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd \
+            -n fips_test_a -k "system-images;android-35;google_apis;x86_64" -d "pixel_6" -f
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd \
+            -n fips_test_b -k "system-images;android-35;google_apis;x86_64" -d "pixel_6" -f
+
+      - name: Start emulators
+        run: |
+          $ANDROID_HOME/emulator/emulator -avd fips_test_a -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -read-only &
+          $ANDROID_HOME/emulator/emulator -avd fips_test_b -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -read-only -port 5556 &
+
+      - name: Wait for emulators
+        run: |
+          echo "Waiting for emulator A..."
+          adb -s emulator-5554 wait-for-device
+          $ANDROID_HOME/platform-tools/adb -s emulator-5554 shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 2; done'
+          echo "Emulator A booted"
+
+          echo "Waiting for emulator B..."
+          adb -s emulator-5556 wait-for-device
+          $ANDROID_HOME/platform-tools/adb -s emulator-5556 shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 2; done'
+          echo "Emulator B booted"
+
+          adb -s emulator-5554 root
+          adb -s emulator-5556 root
+
+      - name: Install APK
+        run: |
+          adb -s emulator-5554 install -r apps/fips-e2e/android/app/build/outputs/apk/debug/app-debug.apk
+          adb -s emulator-5556 install -r apps/fips-e2e/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Run E2E tests
+        run: node apps/fips-e2e/e2e/run-tests.mjs
+
+      - name: Upload test logs on failure
+        if: failure()
+        run: |
+          adb -s emulator-5554 logcat -d > emulator-a-logcat.txt
+          adb -s emulator-5556 logcat -d > emulator-b-logcat.txt
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: |
+            emulator-a-logcat.txt
+            emulator-b-logcat.txt

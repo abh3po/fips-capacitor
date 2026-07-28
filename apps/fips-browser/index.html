@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>FIPS Browser</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+    }
+    #toolbar button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #toolbar button:active { background: #30363d; }
+    #toolbar button.primary { background: #238636; border-color: #2ea043; color: #fff; }
+    #url-bar {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0 8px;
+    }
+    #url-bar .protocol { color: #8b949e; font-size: 13px; margin-right: 4px; }
+    #url-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #c9d1d9;
+      font-size: 14px;
+      font-family: monospace;
+      padding: 8px 0;
+      outline: none;
+    }
+    #url-bar input::placeholder { color: #484f58; }
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 12px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      font-size: 11px;
+      color: #8b949e;
+    }
+    #status-bar .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.green { background: #3fb950; }
+    .dot.yellow { background: #d29922; }
+    .dot.red { background: #f85149; }
+    #content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    #content h2 { font-size: 18px; color: #58a6ff; margin-bottom: 8px; }
+    #content p { font-size: 13px; color: #8b949e; max-width: 400px; line-height: 1.5; }
+    #webview-container {
+      flex: 1;
+      display: none;
+      position: relative;
+    }
+    #webview-container.active { display: flex; }
+    #webview-frame {
+      flex: 1;
+      border: none;
+      background: #fff;
+    }
+    #drawer-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      display: none;
+    }
+    #drawer-overlay.open { display: block; }
+    #drawer {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: 320px;
+      max-width: 90vw;
+      background: #161b22;
+      border-left: 1px solid #30363d;
+      z-index: 101;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    #drawer.open { transform: translateX(0); }
+    #drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #30363d;
+    }
+    #drawer-header h3 { font-size: 14px; color: #58a6ff; }
+    #drawer-header button {
+      background: none;
+      border: none;
+      color: #8b949e;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .drawer-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid #21262d;
+    }
+    .drawer-section h4 {
+      font-size: 11px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .drawer-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 3px 0;
+    }
+    .drawer-row .label { color: #8b949e; }
+    .drawer-row .value { font-family: monospace; color: #c9d1d9; word-break: break-all; }
+    .drawer-peer {
+      padding: 6px 0;
+      border-bottom: 1px solid #21262d;
+      font-size: 12px;
+    }
+    .drawer-peer .npub { color: #58a6ff; font-family: monospace; }
+    .drawer-peer .meta { color: #8b949e; font-size: 11px; }
+    .drawer-session {
+      padding: 6px 0;
+      border-bottom: 1px solid #21262d;
+      font-size: 12px;
+    }
+    .drawer-session .npub { color: #7ee787; font-family: monospace; }
+    .drawer-session .meta { color: #8b949e; font-size: 11px; }
+    .bookmark {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .bookmark:hover { background: #30363d; }
+    .bookmark .name { color: #58a6ff; font-family: monospace; }
+    .bookmark .desc { color: #8b949e; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button onclick="goBack()" title="Back">←</button>
+    <button onclick="goForward()" title="Forward">→</button>
+    <button onclick="goReload()" title="Reload">↻</button>
+    <div id="url-bar">
+      <span class="protocol">fips://</span>
+      <input id="url-input" type="text" placeholder="npub1... or .fips domain" onkeydown="if(event.key==='Enter')navigate()" />
+    </div>
+    <button class="primary" onclick="navigate()">Go</button>
+    <button onclick="toggleDrawer()" title="Node Status">☰</button>
+  </div>
+
+  <div id="status-bar">
+    <span><span id="status-dot" class="dot red"></span> <span id="status-text">Disconnected</span></span>
+    <span>Peers: <span id="status-peers">0</span></span>
+    <span>Sessions: <span id="status-sessions">0</span></span>
+    <span>Uptime: <span id="status-uptime">—</span></span>
+  </div>
+
+  <div id="content">
+    <h2>FIPS Mesh Browser</h2>
+    <p>Start the FIPS node to browse .fips websites and connect to peers on the mesh network.</p>
+    <button class="primary" onclick="startNode()" style="margin-top:16px;font-size:14px;padding:10px 24px;">Start FIPS Node</button>
+
+    <div style="margin-top:24px;text-align:left;max-width:400px;">
+      <h4 style="font-size:12px;color:#8b949e;text-transform:uppercase;margin-bottom:8px;">Bookmarks</h4>
+      <div class="bookmark" onclick="navigateTo('npub1q8q4u0q7q8q4u0q7q8q4u0q7q8q4u0q7q8q4u0q7q')">
+        <span class="name">fips.network</span>
+        <span class="desc">FIPS project homepage</span>
+      </div>
+      <div class="bookmark" onclick="navigateTo('npub1test.fips')">
+        <span class="name">test.fips</span>
+        <span class="desc">FIPS connectivity test page</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="webview-container">
+    <iframe id="webview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+  </div>
+
+  <div id="drawer-overlay" onclick="toggleDrawer()"></div>
+  <div id="drawer">
+    <div id="drawer-header">
+      <h3>Node Status</h3>
+      <button onclick="toggleDrawer()">✕</button>
+    </div>
+    <div class="drawer-section">
+      <h4>Identity</h4>
+      <div class="drawer-row"><span class="label">Npub</span><span class="value" id="d-npub">—</span></div>
+      <div class="drawer-row"><span class="label">Address</span><span class="value" id="d-address">—</span></div>
+      <div class="drawer-row"><span class="label">Node Addr</span><span class="value" id="d-node-addr">—</span></div>
+    </div>
+    <div class="drawer-section">
+      <h4>Network</h4>
+      <div class="drawer-row"><span class="label">State</span><span class="value" id="d-state">—</span></div>
+      <div class="drawer-row"><span class="label">Peers</span><span class="value" id="d-peers">0</span></div>
+      <div class="drawer-row"><span class="label">Sessions</span><span class="value" id="d-sessions">0</span></div>
+      <div class="drawer-row"><span class="label">Links</span><span class="value" id="d-links">0</span></div>
+      <div class="drawer-row"><span class="label">Transports</span><span class="value" id="d-transports">0</span></div>
+      <div class="drawer-row"><span class="label">Mesh Size</span><span class="value" id="d-mesh-size">—</span></div>
+      <div class="drawer-row"><span class="label">Uptime</span><span class="value" id="d-uptime">—</span></div>
+    </div>
+    <div class="drawer-section">
+      <h4>Peers</h4>
+      <div id="d-peer-list" style="font-size:12px;color:#8b949e;">No peers</div>
+    </div>
+    <div class="drawer-section">
+      <h4>Sessions</h4>
+      <div id="d-session-list" style="font-size:12px;color:#8b949e;">No sessions</div>
+    </div>
+    <div class="drawer-section">
+      <button class="danger" onclick="stopNode()" style="width:100%;background:#da3633;border-color:#f85149;color:#fff;border-radius:6px;padding:8px;font-size:13px;cursor:pointer;">Stop Node</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

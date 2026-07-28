@@ -1,0 +1,75 @@
+{
+  "name": "@formstr/fips-capacitor-plugin",
+  "version": "0.1.0",
+  "description": "Capacitor plugin that runs a FIPS mesh networking node on Android, enabling peer-to-peer encrypted communication via Nostr identities",
+  "license": "MIT",
+  "author": "Formstr <hello@formstr.app>",
+  "homepage": "https://github.com/formstr-hq/fips-capacitor-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/formstr-hq/fips-capacitor-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/formstr-hq/fips-capacitor-plugin/issues"
+  },
+  "keywords": ["capacitor", "plugin", "native", "nostr", "fips", "mesh", "p2p"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/plugin.js",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "android/proguard-rules.pro",
+    "dist/",
+    "rust/",
+    "FipsCapacitorPlugin.podspec"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc && rollup -c rollup.config.js",
+    "clean": "rimraf ./dist",
+    "watch": "tsc --watch",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext ts",
+    "fmt": "prettier \"**/*.{ts,js}\" --write",
+    "test:ts": "jest",
+    "test:android": "cd android && ./gradlew clean testDebugUnitTest --no-daemon --stacktrace",
+    "test": "npm run test:ts",
+    "test:e2e": "node apps/fips-e2e/e2e/run-tests.mjs",
+    "release": "npm run build && npm test && npm publish",
+    "release:dry": "npm run build && npm test && npm publish --dry-run",
+    "dev:e2e": "cd apps/fips-e2e && npm run dev",
+    "dev:browser": "cd apps/fips-browser && npm run dev",
+    "build:e2e": "cd apps/fips-e2e && npm run build",
+    "build:browser": "cd apps/fips-browser && npm run build"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@types/jest": "^29.5.12",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "~2.3.0",
+    "rimraf": "^3.0.2",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "rollup": "^2.32.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^7.0.0"
+  },
+  "capacitor": {
+    "android": {
+      "src": "android",
+      "name": "FipsPlugin"
+    }
+  }
+}

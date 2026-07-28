@@ -1,0 +1,164 @@
+name: Build Debug APKs
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Which app to build"
+        required: true
+        type: choice
+        options:
+          - both
+          - fips-e2e
+          - fips-browser
+  pull_request:
+    types: [labeled]
+
+jobs:
+  build-e2e:
+    if: |
+      (github.event_name == 'workflow_dispatch' && (inputs.app == 'both' || inputs.app == 'fips-e2e')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-apk'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build native libraries
+        working-directory: rust
+        run: |
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 \
+            -o ../android/src/main/jniLibs build --release
+
+      - name: Build fips-e2e web assets
+        working-directory: apps/fips-e2e
+        run: |
+          npm install
+          npm run build
+
+      - name: Sync Capacitor Android
+        working-directory: apps/fips-e2e
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: apps/fips-e2e/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload fips-e2e APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fips-e2e-debug
+          path: apps/fips-e2e/android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-browser:
+    if: |
+      (github.event_name == 'workflow_dispatch' && (inputs.app == 'both' || inputs.app == 'fips-browser')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build-apk'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build native libraries
+        working-directory: rust
+        run: |
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 \
+            -o ../android/src/main/jniLibs build --release
+
+      - name: Build fips-browser web assets
+        working-directory: apps/fips-browser
+        run: |
+          npm install
+          npm run build
+
+      - name: Sync Capacitor Android
+        working-directory: apps/fips-browser
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: apps/fips-browser/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload fips-browser APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fips-browser-debug
+          path: apps/fips-browser/android/app/build/outputs/apk/debug/app-debug.apk
+
+  comment-pr:
+    if: github.event_name == 'pull_request'
+    needs: [build-e2e, build-browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment APK links on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.runId;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const body = `## Debug APKs
+
+            | App | Download |
+            |-----|----------|
+            | fips-e2e | [Download](https://github.com/${owner}/${repo}/actions/runs/${runId}) |
+            | fips-browser | [Download](https://github.com/${owner}/${repo}/actions/runs/${runId}) |
+
+            Go to the run page, scroll to **Artifacts**, and download the APK you want. Install via \`adb install <apk>\` or transfer to your phone.`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Debug APKs')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner, repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

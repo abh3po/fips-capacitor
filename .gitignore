@@ -1,0 +1,28 @@
+node_modules/
+dist/
+target/
+.DS_Store
+*.jks
+*.keystore
+
+# Android
+android/.gradle/
+android/build/
+android/captures/
+android/local.properties
+apps/*/android/.gradle/
+apps/*/android/build/
+apps/*/android/captures/
+apps/*/android/local.properties
+apps/*/android/app/build/
+
+# Rust
+rust/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Capacitor
+apps/*/android/app/src/main/assets/public/
