@@ -8,7 +8,7 @@ description = "JNI bindings for the FIPS mesh networking protocol"
 crate-type = ["cdylib"]
 
 [dependencies]
-fips = { git = "https://github.com/jmcorgan/fips.git", branch = "master" }
+fips = { git = "https://github.com/abh3po/fips.git", branch = "feat/public-send-datagram" }
 jni = "0.21"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

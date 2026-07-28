@@ -1,15 +1,19 @@
 use jni::JNIEnv;
-use jni::objects::{JClass, JString, JObject};
-use jni::sys::{jlong, jstring, jobject};
+use jni::objects::{JClass, JString};
+use jni::sys::{jlong, jstring};
 use std::sync::Mutex;
-use std::collections::VecDeque;
-use fips::{Node, Config, Identity, NodeState};
-use fips::config::{PeerConfig, PeerAddress, ConnectPolicy};
+use std::sync::OnceLock;
+use fips::{Node, Config, Identity};
+use fips::config::{PeerConfig, PeerAddress, ConnectPolicy, TransportInstances, UdpConfig};
+use fips::identity::{decode_npub, NodeAddr};
 use serde::{Deserialize, Serialize};
 
 static NODE: Mutex<Option<Node>> = Mutex::new(None);
-static RUNTIME: Mutex<Option<tokio::runtime::Runtime>> = Mutex::new(None);
-static DATAGRAM_QUEUE: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
+
+fn runtime() -> &'static tokio::runtime::Runtime {
+    static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RT.get_or_init(|| tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"))
+}
 
 #[derive(Deserialize)]
 struct JniConfig {
@@ -78,14 +82,6 @@ struct JniDatagram {
     data: String,
 }
 
-fn get_runtime() -> &'static tokio::runtime::Runtime {
-    let mut rt = RUNTIME.lock().unwrap();
-    if rt.is_none() {
-        *rt = Some(tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"));
-    }
-    rt.as_ref().unwrap()
-}
-
 fn build_config(jni_config: &JniConfig) -> Config {
     let mut config = Config::new();
 
@@ -98,21 +94,20 @@ fn build_config(jni_config: &JniConfig) -> Config {
     if jni_config.leaf_only.unwrap_or(false) {
         config.node.leaf_only = true;
     }
-    if let Some(level) = &jni_config.log_level {
+    if let Some(ref level) = &jni_config.log_level {
         config.node.log_level = Some(level.clone());
     }
 
-    if let Some(port) = jni_config.udp_port {
-        config.transports.udp.push(fips::config::UdpConfig {
-            bind_addr: format!("0.0.0.0:{}", port),
-            ..Default::default()
-        });
+    let bind_addr = if let Some(port) = jni_config.udp_port {
+        Some(format!("0.0.0.0:{}", port))
     } else {
-        config.transports.udp.push(fips::config::UdpConfig {
-            bind_addr: "0.0.0.0:0".to_string(),
-            ..Default::default()
-        });
-    }
+        Some("0.0.0.0:0".to_string())
+    };
+
+    config.transports.udp = TransportInstances::Single(UdpConfig {
+        bind_addr,
+        ..Default::default()
+    });
 
     if let Some(ref peers) = jni_config.peers {
         config.peers = peers.iter().map(|p| {
@@ -160,6 +155,15 @@ fn node_status(node: &Node) -> JniStatus {
     }
 }
 
+fn resolve_node_addr(npub_or_hex: &str) -> Option<NodeAddr> {
+    if npub_or_hex.starts_with("npub1") {
+        decode_npub(npub_or_hex).ok().map(|pk| NodeAddr::from_pubkey(&pk))
+    } else {
+        let bytes = hex::decode(npub_or_hex).ok()?;
+        NodeAddr::from_slice(&bytes).ok()
+    }
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeStart(
     mut env: JNIEnv,
@@ -182,10 +186,9 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeStart(
         Identity::generate()
     };
 
-    let rt = get_runtime();
     let mut node = Node::with_identity(identity, config).expect("Failed to create node");
 
-    rt.block_on(async {
+    runtime().block_on(async {
         node.start().await.expect("Failed to start node");
     });
 
@@ -214,8 +217,7 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeStop(
 ) {
     let mut node_slot = NODE.lock().unwrap();
     if let Some(mut node) = node_slot.take() {
-        let rt = get_runtime();
-        rt.block_on(async {
+        runtime().block_on(async {
             let _ = node.stop().await;
         });
     }
@@ -274,13 +276,15 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeSendDatagram(
 
     let mut node_slot = NODE.lock().unwrap();
     if let Some(ref mut node) = *node_slot {
-        let rt = get_runtime();
-        rt.block_on(async {
-            let _ = node.send_encrypted_link_message(
-                &fips::NodeAddr::from_npub(&to_npub).unwrap(),
-                data.as_bytes(),
-            ).await;
-        });
+        if let Some(node_addr) = resolve_node_addr(&to_npub) {
+            runtime().block_on(async {
+                if let Err(e) = node.send_encrypted_link_message(&node_addr, data.as_bytes()).await {
+                    log::error!("sendDatagram failed: {:?}", e);
+                }
+            });
+        } else {
+            log::error!("sendDatagram: could not resolve npub to NodeAddr: {}", to_npub);
+        }
     }
 }
 
@@ -296,13 +300,15 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeSendDatagramByAddr
 
     let mut node_slot = NODE.lock().unwrap();
     if let Some(ref mut node) = *node_slot {
-        let rt = get_runtime();
-        rt.block_on(async {
-            let _ = node.send_encrypted_link_message(
-                &fips::NodeAddr::from_hex(&to_node_addr).unwrap(),
-                data.as_bytes(),
-            ).await;
-        });
+        if let Some(node_addr) = resolve_node_addr(&to_node_addr) {
+            runtime().block_on(async {
+                if let Err(e) = node.send_encrypted_link_message(&node_addr, data.as_bytes()).await {
+                    log::error!("sendDatagramByAddr failed: {:?}", e);
+                }
+            });
+        } else {
+            log::error!("sendDatagramByAddr: could not resolve to NodeAddr: {}", to_node_addr);
+        }
     }
 }
 
@@ -313,7 +319,18 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeListSessions(
 ) -> jstring {
     let node_slot = NODE.lock().unwrap();
     if let Some(ref node) = *node_slot {
-        let sessions: Vec<JniSessionInfo> = vec![]; // TODO: iterate session_entries
+        let sessions: Vec<JniSessionInfo> = node.session_entries().map(|(addr, entry)| {
+            let (ps, pr, bs, br) = entry.traffic_counters();
+            JniSessionInfo {
+                remote_npub: PeerIdentity::from_pubkey(entry.remote_pubkey().clone()).npub(),
+                remote_node_addr: hex::encode(addr.as_bytes()),
+                established: entry.is_established(),
+                packets_sent: ps,
+                packets_recv: pr,
+                bytes_sent: bs,
+                bytes_recv: br,
+            }
+        }).collect();
         let json = serde_json::to_string(&sessions).unwrap();
         env.new_string(json).unwrap().into_raw()
     } else {
@@ -330,10 +347,10 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeListPeers(
     if let Some(ref node) = *node_slot {
         let peers: Vec<JniPeerInfo> = node.peers().map(|p| {
             JniPeerInfo {
-                npub: p.identity().npub(),
+                npub: p.npub(),
                 node_addr: hex::encode(p.node_addr().as_bytes()),
                 transport: "udp".to_string(),
-                link_established: p.is_established(),
+                link_established: p.can_send(),
                 rtt_ms: None,
                 loss_percent: None,
                 jitter_ms: None,
@@ -373,8 +390,7 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeAddPeer(
                 });
             }
         }
-        let rt = get_runtime();
-        rt.block_on(async {
+        runtime().block_on(async {
             let _ = node.update_peers(vec![pc]).await;
         });
     }
@@ -386,13 +402,13 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeRemovePeer(
     _class: JClass,
     npub: JString,
 ) {
-    let npub: String = env.get_string(&npub).unwrap().into();
+    let _npub: String = env.get_string(&npub).unwrap().into();
     let mut node_slot = NODE.lock().unwrap();
     if let Some(ref mut node) = *node_slot {
-        let rt = get_runtime();
-        rt.block_on(async {
-            let _ = node.update_peers(vec![]).await;
-        });
+        // TODO: Need a way to remove a specific peer by npub.
+        // update_peers replaces the entire peer list.
+        log::warn!("removePeer not yet implemented — requires per-peer removal API in fips crate");
+        let _ = node;
     }
 }
 
@@ -400,19 +416,9 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeRemovePeer(
 pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativePollDatagram(
     mut env: JNIEnv,
     _class: JClass,
-    timeout_ms: jni::sys::jint,
+    _timeout_ms: jni::sys::jint,
 ) -> jstring {
-    let mut queue = DATAGRAM_QUEUE.lock().unwrap();
-    if let Some(datagram) = queue.pop_front() {
-        env.new_string(datagram).unwrap().into_raw()
-    } else {
-        std::mem::drop(queue);
-        std::thread::sleep(std::time::Duration::from_millis(timeout_ms as u64));
-        let mut queue = DATAGRAM_QUEUE.lock().unwrap();
-        if let Some(datagram) = queue.pop_front() {
-            env.new_string(datagram).unwrap().into_raw()
-        } else {
-            env.new_string("").unwrap().into_raw()
-        }
-    }
+    // TODO: Datagram receive requires a public API on the fips crate
+    // to receive session-layer datagrams from the Node.
+    env.new_string("").unwrap().into_raw()
 }
