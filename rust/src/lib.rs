@@ -322,7 +322,7 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeListSessions(
         let sessions: Vec<JniSessionInfo> = node.session_entries().map(|(addr, entry)| {
             let (ps, pr, bs, br) = entry.traffic_counters();
             JniSessionInfo {
-                remote_npub: PeerIdentity::from_pubkey(entry.remote_pubkey().clone()).npub(),
+                remote_npub: fips::PeerIdentity::from_pubkey_full(*entry.remote_pubkey()).npub(),
                 remote_node_addr: hex::encode(addr.as_bytes()),
                 established: entry.is_established(),
                 packets_sent: ps,
