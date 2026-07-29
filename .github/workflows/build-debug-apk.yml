@@ -57,6 +57,11 @@ jobs:
         working-directory: apps/fips-e2e
         run: npx cap sync android
 
+      - name: Generate Gradle wrapper
+        working-directory: apps/fips-e2e/android
+        run: |
+          gradle wrapper --gradle-version 8.7
+
       - name: Build debug APK
         working-directory: apps/fips-e2e/android
         run: ./gradlew assembleDebug
@@ -108,6 +113,11 @@ jobs:
       - name: Sync Capacitor Android
         working-directory: apps/fips-browser
         run: npx cap sync android
+
+      - name: Generate Gradle wrapper
+        working-directory: apps/fips-browser/android
+        run: |
+          gradle wrapper --gradle-version 8.7
 
       - name: Build debug APK
         working-directory: apps/fips-browser/android
