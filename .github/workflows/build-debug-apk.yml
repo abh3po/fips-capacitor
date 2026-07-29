@@ -11,8 +11,6 @@ on:
           - both
           - fips-e2e
           - fips-browser
-  pull_request:
-    types: [labeled]
 
 jobs:
   build-e2e:
