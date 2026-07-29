@@ -3,7 +3,7 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use std::sync::Mutex;
 use std::sync::OnceLock;
-use fips::{Node, Config, Identity};
+use fips::{Node, Config, Identity, PeerIdentity};
 use fips::config::{PeerConfig, PeerAddress, ConnectPolicy, TransportInstances, UdpConfig};
 use fips::identity::{decode_npub, NodeAddr};
 use serde::{Deserialize, Serialize};
@@ -73,13 +73,6 @@ struct JniPeerInfo {
     jitter_ms: Option<f64>,
     bytes_sent: u64,
     bytes_recv: u64,
-}
-
-#[derive(Serialize)]
-struct JniDatagram {
-    from_npub: String,
-    from_node_addr: String,
-    data: String,
 }
 
 fn build_config(jni_config: &JniConfig) -> Config {
@@ -322,7 +315,7 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeListSessions(
         let sessions: Vec<JniSessionInfo> = node.session_entries().map(|(addr, entry)| {
             let (ps, pr, bs, br) = entry.traffic_counters();
             JniSessionInfo {
-                remote_npub: fips::PeerIdentity::from_pubkey_full(*entry.remote_pubkey()).npub(),
+                remote_npub: PeerIdentity::from_pubkey_full(*entry.remote_pubkey()).npub(),
                 remote_node_addr: hex::encode(addr.as_bytes()),
                 established: entry.is_established(),
                 packets_sent: ps,
@@ -403,13 +396,7 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativeRemovePeer(
     npub: JString,
 ) {
     let _npub: String = env.get_string(&npub).unwrap().into();
-    let mut node_slot = NODE.lock().unwrap();
-    if let Some(ref mut node) = *node_slot {
-        // TODO: Need a way to remove a specific peer by npub.
-        // update_peers replaces the entire peer list.
-        log::warn!("removePeer not yet implemented — requires per-peer removal API in fips crate");
-        let _ = node;
-    }
+    log::warn!("removePeer not yet implemented — requires per-peer removal API in fips crate");
 }
 
 #[no_mangle]
@@ -418,7 +405,6 @@ pub extern "system" fn Java_com_formstr_fips_FipsBridge_nativePollDatagram(
     _class: JClass,
     _timeout_ms: jni::sys::jint,
 ) -> jstring {
-    // TODO: Datagram receive requires a public API on the fips crate
-    // to receive session-layer datagrams from the Node.
+    log::warn!("pollDatagram not yet implemented — requires public receive API in fips crate");
     env.new_string("").unwrap().into_raw()
 }
