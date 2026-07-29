@@ -57,8 +57,11 @@ jobs:
         working-directory: apps/fips-e2e
         run: npx cap sync android
 
-      - name: Install Gradle
-        run: sudo apt-get update && sudo apt-get install -y gradle
+      - name: Setup Gradle 8.7
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          sudo unzip -q gradle-8.7-bin.zip -d /opt
+          echo "/opt/gradle-8.7/bin" >> $GITHUB_PATH
 
       - name: Build debug APK
         working-directory: apps/fips-e2e/android
@@ -112,8 +115,11 @@ jobs:
         working-directory: apps/fips-browser
         run: npx cap sync android
 
-      - name: Install Gradle
-        run: sudo apt-get update && sudo apt-get install -y gradle
+      - name: Setup Gradle 8.7
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          sudo unzip -q gradle-8.7-bin.zip -d /opt
+          echo "/opt/gradle-8.7/bin" >> $GITHUB_PATH
 
       - name: Build debug APK
         working-directory: apps/fips-browser/android
