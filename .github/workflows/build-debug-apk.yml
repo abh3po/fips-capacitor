@@ -57,14 +57,12 @@ jobs:
         working-directory: apps/fips-e2e
         run: npx cap sync android
 
-      - name: Generate Gradle wrapper
-        working-directory: apps/fips-e2e/android
-        run: |
-          gradle wrapper --gradle-version 8.7
+      - name: Install Gradle
+        run: sudo apt-get update && sudo apt-get install -y gradle
 
       - name: Build debug APK
         working-directory: apps/fips-e2e/android
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload fips-e2e APK
         uses: actions/upload-artifact@v4
@@ -114,14 +112,12 @@ jobs:
         working-directory: apps/fips-browser
         run: npx cap sync android
 
-      - name: Generate Gradle wrapper
-        working-directory: apps/fips-browser/android
-        run: |
-          gradle wrapper --gradle-version 8.7
+      - name: Install Gradle
+        run: sudo apt-get update && sudo apt-get install -y gradle
 
       - name: Build debug APK
         working-directory: apps/fips-browser/android
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload fips-browser APK
         uses: actions/upload-artifact@v4
