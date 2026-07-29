@@ -16,7 +16,7 @@
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/core": "^7.0.0",
-    "@formstr/fips-capacitor-plugin": "workspace:*"
+    "@formstr/fips-capacitor-plugin": "file:../.."
   },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0",
